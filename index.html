@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistente Virtual - Jarvis Style</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0b0f19;
+            color: #00bfff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        .container {
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+        }
+        /* Núcleo visual estilo Jarvis */
+        .jarvis-core {
+            width: 140px;
+            height: 140px;
+            border: 4px dashed #00bfff;
+            border-radius: 50%;
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: girar 10s linear infinite;
+            box-shadow: 0 0 25px rgba(0, 191, 255, 0.4);
+            position: relative;
+        }
+        .jarvis-core::after {
+            content: '';
+            width: 100px;
+            height: 100px;
+            border: 2px solid rgba(0, 191, 255, 0.3);
+            border-radius: 50%;
+            position: absolute;
+            animation: girar-inverso 6s linear infinite;
+        }
+        .jarvis-core.thinking {
+            border-color: #ff3b30;
+            box-shadow: 0 0 30px rgba(255, 59, 48, 0.6);
+            animation: girar 2s linear infinite, latido 0.8s ease-in-out infinite alternate;
+        }
+        @keyframes girar {
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes girar-inverso {
+            100% { transform: rotate(-360deg); }
+        }
+        @keyframes latido {
+            from { transform: scale(1); }
+            to { transform: scale(1.08); }
+        }
+        button {
+            background: linear-gradient(135deg, #007AFF, #00bfff);
+            color: white;
+            border: none;
+            padding: 12px 28px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 15px;
+            box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4);
+            transition: 0.2s;
+        }
+        button:active {
+            transform: scale(0.95);
+        }
+        button.listening {
+            background: linear-gradient(135deg, #ff3b30, #ff9500);
+            box-shadow: 0 4px 15px rgba(255, 59, 48, 0.5);
+        }
+        #chat-log {
+            margin-top: 20px;
+            background-color: rgba(20, 30, 48, 0.7);
+            border: 1px solid rgba(0, 191, 255, 0.2);
+            padding: 15px;
+            border-radius: 12px;
+            min-height: 100px;
+            max-height: 180px;
+            overflow-y: auto;
+            text-align: left;
+            font-size: 14px;
+        }
+        .user-msg { color: #00bfff; margin-bottom: 8px; }
+        .bot-msg { color: #32cd32; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>🌐 Asistente IA</h2>
+        
+        <!-- Núcleo visual animado -->
+        <div id="jarvisCore" class="jarvis-core">
+            <span style="font-size: 24px;">🎙️</span>
+        </div>
+        
+        <button id="micBtn" onclick="escucharVoz()">Hablar</button>
+        
+        <div id="chat-log">
+            <div class="bot-msg"><b>Asistente:</b> ¡Hola! ¿En qué te puedo ayudar?</div>
+        </div>
+    </div>
+
+    <script>
+        // TU URL DE GOOGLE APPS SCRIPT (Ya configurada previamente)
+        const URL_GAS = "https://script.google.com/macros/s/AKfycbwPz6gR668m9k9M8hP77g53vX5E6s8uX9y7c4b3a2/exec"; // Reemplaza si necesitas tu link exacto
+
+        const btn = document.getElementById('micBtn');
+        const chatLog = document.getElementById('chat-log');
+        const jarvisCore = document.getElementById('jarvisCore');
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.lang = 'es-ES';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            recognition.onstart = () => {
+                btn.classList.add('listening');
+                btn.innerText = 'Escuchando...';
+                jarvisCore.classList.add('thinking');
+            };
+
+            recognition.onresult = (event) => {
+                const textoTranscrito = event.results[0][0].transcript;
+                agregarMensaje("Tú", textoTranscrito, "user-msg");
+                enviarAlServidor(textoTranscrito);
+            };
+
+            recognition.onerror = () => {
+                restaurarInterfaz();
+            };
+
+            recognition.onend = () => {
+                restaurarInterfaz();
+            };
+        } else {
+            alert("Tu navegador no soporta reconocimiento de voz. Usa Google Chrome.");
+        }
+
+        function escucharVoz() {
+            if (recognition) {
+                try { recognition.start(); } catch (e) { recognition.stop(); }
+            }
+        }
+
+        function restaurarInterfaz() {
+            btn.classList.remove('listening');
+            btn.innerText = 'Hablar';
+            jarvisCore.classList.remove('thinking');
+        }
+
+        async function enviarAlServidor(mensaje) {
+            agregarMensaje("Asistente", "Procesando...", "bot-msg");
+            jarvisCore.classList.add('thinking');
+            
+            try {
+                let response = await fetch(URL_GAS, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ mensaje: mensaje })
+                });
+
+                let data = await response.json();
+                chatLog.lastChild.remove();
+
+                if (data.status === "success") {
+                    agregarMensaje("Asistente", data.respuesta, "bot-msg");
+                    hablarTexto(data.respuesta);
+                } else {
+                    agregarMensaje("Asistente", "Error en el servidor.", "bot-msg");
+                }
+            } catch (error) {
+                chatLog.lastChild.remove();
+                agregarMensaje("Asistente", "Error de conexión con la API.", "bot-msg");
+            } finally {
+                jarvisCore.classList.remove('thinking');
+            }
+        }
+
+        // Sintetizador de voz optimizado con voz femenina
+        function hablarTexto(texto) {
+            if ('speechSynthesis' in window) {
+                let utterance = new SpeechSynthesisUtterance(texto);
+                utterance.lang = 'es-ES';
+                utterance.rate = 1.05;
+
+                let voces = window.speechSynthesis.getVoices();
+                let vozFemenina = voces.find(voz => 
+                    voz.lang.includes('es') && (
+                        voz.name.toLowerCase().includes('female') || 
+                        voz.name.toLowerCase().includes('helena') || 
+                        voz.name.toLowerCase().includes('laura') || 
+                        voz.name.toLowerCase().includes('lucia') || 
+                        voz.name.toLowerCase().includes('sara') || 
+                        voz.name.toLowerCase().includes('google español') ||
+                        voz.name.toLowerCase().includes('sabina')
+                    )
+                );
+
+                if (vozFemenina) {
+                    utterance.voice = vozFemenina;
+                }
+
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+        }
+
+        function agregarMensaje(remitente, texto, clase) {
+            let div = document.createElement('div');
+            div.className = clase;
+            div.innerHTML = `<b>${remitente}:</b> ${texto}`;
+            chatLog.appendChild(div);
+            chatLog.scrollTop = chatLog.scrollHeight;
+        }
+    </script>
+</body>
+</html>
